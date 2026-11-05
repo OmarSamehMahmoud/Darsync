@@ -99,3 +99,10 @@ The frontend uses relative `static/...` asset paths for the repository subpath. 
 ## 7. Data retention and limits
 
 The Supabase project currently uses a private Storage bucket and Postgres. Free-tier quotas and inactivity pausing can change; do not treat free hosting as a guaranteed lifetime service. The current app pilot is limited to five Auth accounts by a database trigger and the admin provisioning function.
+
+
+## GitHub Pages plan requirement
+
+The Darsync repository is currently private. GitHub Pages on GitHub Free requires a public repository; private-repository Pages requires GitHub Pro, Team, or Enterprise. Do not change repository visibility without an explicit decision. If using a plan that permits Pages from a private repository, remember that the published site is normally public unless your organization has an eligible private Pages access-control feature. The app's student data remains protected by Supabase Auth and RLS.
+
+Official reference: https://docs.github.com/en/pages/getting-started-with-github-pages
