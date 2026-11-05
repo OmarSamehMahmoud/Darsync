@@ -30,7 +30,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   requested_username text;
   base_username text;
@@ -47,7 +47,7 @@ begin
   values (new.id, requested_username, 'user');
   return new;
 end;
-$;
+$$;
 
 -- Ensure the study index supports bounded page retrieval by course and file.
 create index if not exists idx_study_pages_scope_file_page
