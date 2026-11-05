@@ -62,7 +62,18 @@ Deno.serve(async (req) => {
     const id = String(body.user_id || "");
     if (!id || id === authData.user.id) return json({ detail: "You cannot modify your own account here." }, 400);
     const update = action === "role"
-      ? { role: ["user", "admin", "super_admin"].includes(body.role) ? body.role : "user" }
+      ? (() => {
+          const role = ["user", "admin", "super_admin"].includes(body.role) ? body.role : "user";
+          const canManageLibrary = role === "admin" || role === "super_admin";
+          return {
+            role,
+            permissions: {
+              update_rag: canManageLibrary,
+              add_rag: canManageLibrary,
+              remove_rag: canManageLibrary,
+            },
+          };
+        })()
       : { permissions: {
           update_rag: !!body.permissions?.update_rag,
           add_rag: !!body.permissions?.add_rag,
