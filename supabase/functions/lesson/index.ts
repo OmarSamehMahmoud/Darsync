@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       const key = `${row.file_id}:${row.page}`;
       if (!grouped.has(key)) grouped.set(key, { ...row, text: "", region_json: [], number: `PDF page ${row.page}` });
       const page = grouped.get(key);
-      if (String(row.text || "").trim()) page.text += (page.text ? "\\n\\n" : "") + row.text;
+      if (String(row.text || "").trim()) page.text += (page.text ? "\n\n" : "") + row.text;
       if (Array.isArray(row.region_json)) page.region_json.push(...row.region_json);
     }
     hits = [...grouped.values()].filter((row) => row.text.trim()).slice(0, 8);
