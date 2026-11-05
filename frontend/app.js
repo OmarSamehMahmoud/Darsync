@@ -1634,7 +1634,7 @@ $('chatForm').addEventListener('submit', async (e) => {
 
     if (lessonMode) {
       let totalSegments = 0;
-      for (let index = 0; index < (totalSegments || 1); index++) {
+      for (let index = 0; index < 8; index++) {
         let segmentText = ''; let segmentDone = false;
         const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
           method: 'POST', signal: controller.signal, headers: requestHeaders,
@@ -1667,6 +1667,7 @@ $('chatForm').addEventListener('submit', async (e) => {
         acc += (acc ? '\n\n' : '') + normalized;
         textEl.textContent = acc; textEl.appendChild(cursor);
         if (index === 0 && totalSegments < 1) throw new Error('The lesson returned an invalid segment count.');
+        if (index + 1 >= totalSegments) break;
       }
       const finalizeRes = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
         method: 'POST', signal: controller.signal, headers: requestHeaders,
