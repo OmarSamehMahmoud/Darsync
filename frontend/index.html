@@ -135,12 +135,12 @@
 
       <form id="loginForm" class="auth-form" autocomplete="off">
         <label class="field">
-          <span class="field-label">Username</span>
-          <input type="text" id="loginUser" placeholder="your name" required />
+          <span class="field-label">Email</span>
+          <input type="email" id="loginUser" placeholder="you@example.com" autocomplete="username" required />
         </label>
         <label class="field">
           <span class="field-label">Password</span>
-          <input type="password" id="loginPass" placeholder="••••••••" required />
+          <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" required />
         </label>
         <button type="submit" class="btn btn-primary btn-glow" id="authSubmit">
           <span id="authSubmitText">Enter Console</span>
