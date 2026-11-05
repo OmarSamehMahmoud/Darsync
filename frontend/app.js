@@ -1599,6 +1599,9 @@ $('chatForm').addEventListener('submit', async (e) => {
 
   try {
     const supabaseConfig = window.DARSYNC_SUPABASE_CONFIG;
+    const { data: sessionData, error: sessionError } = await window.darsyncSupabase.auth.getSession();
+    if (sessionError || !sessionData.session) throw new Error('Your session expired. Please sign in again.');
+    state.token = sessionData.session.access_token;
     const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
       method: 'POST',
       signal: controller.signal,
