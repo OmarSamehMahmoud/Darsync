@@ -57,3 +57,30 @@ Use a Supabase Edge Function as the trusted proxy to NVIDIA. Store `NVIDIA_API_K
 ## GitHub Pages
 
 GitHub Pages serves only static files. The production workflow should be enabled only after the API migration is complete and all asset paths work under the project subpath `/Darsync/`. The current HTML uses root-absolute `/static/...` paths and FastAPI routes, so it is not Pages-ready yet.
+
+
+## Supabase browser connection (in progress)
+
+- [x] Store the project URL and publishable key in `frontend/static/supabase-config.js`. This key is public by design; RLS must protect every table and Storage object.
+- [x] Load the Supabase JS SDK and initialize persistent browser sessions.
+- [x] Connect the sign-in form to Supabase Auth and load the user's profile and role from `public.profiles`.
+- [x] Connect basic reads for taxonomy, study-file metadata, and chats; connect chat creation, retrieval, and deletion.
+- [ ] The full app is **not yet migrated**. Lesson SSE streaming, NVIDIA generation, PDF upload/OCR/indexing, page previews, admin user provisioning/management, feedback, corrections, and settings still require secure Edge Functions or browser-side workflows. Do not enable GitHub Pages for production yet.
+
+### Provision the first owner account
+
+1. Apply the SQL migration in the Supabase SQL Editor.
+2. In **Authentication → Providers → Email**, enable Email provider. For a private pilot, turn off public sign-ups after provisioning accounts.
+3. In **Authentication → Users**, create the owner account using an email and password, and mark/confirm the email as verified if the project requires it.
+4. Copy that user's UUID from Authentication → Users, then run the following in SQL Editor (replace the placeholder with the exact UUID):
+
+```sql
+update public.profiles
+set role = 'super_admin',
+    permissions = '{"update_rag":true,"add_rag":true,"remove_rag":true}'::jsonb
+where id = '<AUTH_USER_UUID>';
+```
+
+5. Sign in to Darsync using that email and password. The browser reads the role from the protected profile row; it does not accept roles from signup metadata.
+
+The database trigger rejects creation of a sixth Auth account. Keep sign-ups disabled for the closed pilot and create remaining accounts from the Supabase Dashboard. The frontend's old admin-user creation UI is not yet connected to a trusted provisioning function.
