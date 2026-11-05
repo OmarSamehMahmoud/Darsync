@@ -84,10 +84,11 @@
     if (!window.Tesseract) throw new Error('Arabic OCR engine failed to load. Refresh the page and try again.');
     const bytes = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
+    const pageCount = pdf.numPages;
     let worker = null;
     const pages = [];
     try {
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
         onProgress({ page: pageNumber, total: pdf.numPages, phase: 'extracting' });
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale: 1 });
@@ -128,7 +129,7 @@
       if (worker) await worker.terminate();
       await pdf.destroy();
     }
-    return { pages, pageCount: pdf.numPages };
+    return { pages, pageCount };
   }
 
   async function renderStoredPage(fileId, pageNumber, crop) {
