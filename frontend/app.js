@@ -1261,18 +1261,8 @@ async function showLessonSource(index) {
     ? 'جارٍ تحميل المقتطف المختار من الكتاب...'
     : 'Loading the selected textbook excerpt…';
   try {
-    const params = new URLSearchParams();
-    if (crop) Object.entries(crop).forEach(([name, value]) => params.set(name, String(value)));
-    const query = params.toString();
-    const response = await fetch(
-      `/api/files/${source.file_id}/pages/${source.page}/preview${query ? `?${query}` : ''}`,
-      { headers: { Authorization: `Bearer ${state.token}` } },
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.detail || `Could not load source page (${response.status})`);
-    }
-    const objectUrl = URL.createObjectURL(await response.blob());
+    const previewBlob = await window.darsyncPdf.renderStoredPage(source.file_id, source.page, crop);
+    const objectUrl = URL.createObjectURL(previewBlob);
     if (requestToken !== state.sourcePreviewToken) {
       URL.revokeObjectURL(objectUrl);
       return;
@@ -1540,11 +1530,17 @@ $('chatForm').addEventListener('submit', async (e) => {
   $('tutorNarrationStatus').textContent = 'PREPARING';
 
   try {
-    const res = await fetch(`/api/chats/${state.currentChat.id}/stream`, {
+    const supabaseConfig = window.DARSYNC_SUPABASE_CONFIG;
+    const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.token}` },
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseConfig.publishableKey,
+        Authorization: `Bearer ${state.token}`,
+      },
       body: JSON.stringify({
+        chat_id: state.currentChat.id,
         question,
         lesson_mode: lessonMode,
         retrieval_query: [
@@ -1994,7 +1990,7 @@ async function uploadSelected(fileList) {
   form.append('test', test);
   try {
     const res = await api.call('/api/files/upload', { method: 'POST', form });
-    toast(`Uploaded ${res.count} study PDF${res.count > 1 ? 's' : ''} — add them to the Study Library`);
+    toast(`Uploaded ${res.count} study PDF${res.count > 1 ? 's' : ''} — ready to add to the Study Library`);
     $('fileInput').value = '';
     renderFiles();
   } catch (err) { toast(err.message, 'error'); }
@@ -2034,13 +2030,8 @@ $('ingestBtn').addEventListener('click', async () => {
       const current = okCount + failed + 1;
       label.textContent = `Adding ${current}/${pending.length}…`;
       try {
-        const job = await api.call(`/api/files/${f.id}/ingest`, { method: 'POST' });
-        if (job.job_id) {
-          const result = await waitForIndexJob(f.id, job.job_id, (progress) => {
-            label.textContent = `Adding ${current}/${pending.length} · ${progress.pages_processed}/${progress.pages_total || '?'} pages`;
-          });
-          totalClauses += result.clauses || 0;
-        }
+        const result = await api.call(`/api/files/${f.id}/ingest`, { method: 'POST' });
+        totalClauses += result.clauses || 0;
         okCount++;
       } catch (err) {
         failed++;
@@ -2145,15 +2136,8 @@ async function renderFiles() {
         btn.disabled = true;
         try {
           const fileId = btn.dataset.reindex;
-          const job = await api.call(`/api/files/${fileId}/reindex`, { method: 'POST' });
-          if (job.job_id) {
-            const result = await waitForIndexJob(fileId, job.job_id, (progress) => {
-              btn.title = `Indexing ${progress.pages_processed}/${progress.pages_total || '?'} pages`;
-            });
-            toast(`Study material refreshed — ${result.clauses} sections`);
-          } else {
-            toast('Study material is already being indexed.');
-          }
+          const result = await api.call(`/api/files/${fileId}/reindex`, { method: 'POST' });
+          toast(`Study material refreshed — ${result.clauses} indexed sections`);
         } catch (err) { toast(err.message, 'error'); }
         renderFiles();
         loadStats();
