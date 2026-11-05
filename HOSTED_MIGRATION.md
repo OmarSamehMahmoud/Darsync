@@ -66,6 +66,7 @@ supabase secrets set NVIDIA_API_KEY="YOUR_NVIDIA_API_KEY"
 supabase secrets set NVIDIA_CHAT_MODEL="minimaxai/minimax-m3.1-flash"
 supabase functions deploy lesson
 supabase functions deploy admin-users
+supabase functions deploy status
 ```
 
 Supabase provides its project URL, anon key and service-role key to Edge Functions at runtime. The `admin-users` function uses the service-role key only on the server. Do not put it in the frontend or commit it to GitHub. If the runtime does not expose it in your project, configure it as an Edge Function secret from the Dashboard; never send it in chat.
