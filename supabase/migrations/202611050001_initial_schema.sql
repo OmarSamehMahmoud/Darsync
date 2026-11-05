@@ -317,8 +317,7 @@ for all to authenticated
 using ((select public.is_darsync_admin()))
 with check ((select public.is_darsync_admin()));
 
--- Create this private bucket in Storage (Dashboard > Storage) with a 1 GiB
--- per-file limit only if the selected Supabase plan permits it. Keep private.
+-- Create this private bucket with a 100 MiB per-file limit. Keep it private.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('study-pdfs', 'study-pdfs', false, 104857600, array['application/pdf'])
 on conflict (id) do nothing;
