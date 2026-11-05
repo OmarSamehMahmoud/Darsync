@@ -219,13 +219,13 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $$
   select exists (
     select 1 from public.profiles p
     where p.id = (select auth.uid())
       and p.role = 'super_admin'
   );
-$;
+$$;
 
 drop policy if exists "profiles_admin_update" on public.profiles;
 drop policy if exists "profiles_super_admin_update" on public.profiles;
