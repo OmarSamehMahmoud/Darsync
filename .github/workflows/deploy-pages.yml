@@ -1,3 +1,4 @@
+# GitHub Pages deployment for the Darsync frontend.
 name: Deploy Darsync to GitHub Pages
 
 on:
