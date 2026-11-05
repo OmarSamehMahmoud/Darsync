@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   if (pagesError) return json({ detail: pagesError.message }, 500);
   const { data: activeDocuments, error: docsError } = await supabase.from("study_documents").select("doc_id,generation_id");
   if (docsError) return json({ detail: docsError.message }, 500);
-  const activeGeneration = new Map((activeDocuments || []).map((doc: any) => [doc.doc_id, doc.generation_id]));
+  const activeGeneration = new Map<string, string>((activeDocuments || []).map((doc: any) => [String(doc.doc_id), String(doc.generation_id)] as [string, string]));
   const allRows = (pageRows || []).filter((row: any) => activeGeneration.get(row.doc_id) === row.generation_id);
   let hits: any[] = [];
 
