@@ -500,6 +500,46 @@ function normalizePermissions(raw) {
   };
 }
 
+async function indexHostedStudyFile(fileId) {
+  const db = window.darsyncSupabase;
+  const { data: file, error: fileError } = await db.from('study_files').select('*').eq('id', fileId).single();
+  if (fileError) throw fileError;
+  const { data: blob, error: downloadError } = await db.storage.from('study-pdfs').download(file.storage_path);
+  if (downloadError) throw downloadError;
+  const pdfFile = new File([blob], file.filename, { type: 'application/pdf' });
+  const extracted = await window.darsyncPdf.processPdf(pdfFile, progress => {
+    const btn = $('ingestBtn');
+    const label = btn && btn.querySelector('span');
+    if (label && btn.disabled && progress.phase) {
+      label.textContent = progress.phase === 'ocr'
+        ? `OCR page ${progress.page}/${progress.total}…`
+        : `Reading page ${progress.page}/${progress.total}…`;
+    }
+  });
+  if (!extracted.pages.length) throw new Error('No readable text was found in this PDF. It may be blank or protected.');
+  const generationId = crypto.randomUUID();
+  const { error: docError } = await db.from('study_documents')
+    .upsert({ doc_id: file.id, generation_id: generationId }, { onConflict: 'doc_id' });
+  if (docError) throw docError;
+  const { error: clearError } = await db.from('study_pages').delete().eq('file_id', file.id);
+  if (clearError) throw clearError;
+  const rows = extracted.pages.map(page => ({
+    doc_id: file.id, generation_id: generationId, file_id: file.id,
+    page: page.page, part: page.part, number: page.number, title: page.title,
+    source_file: file.filename, country: file.country || '', category: file.category || '',
+    subcategory: file.subcategory || '', test: file.test || '',
+    text: page.text, region_json: page.region_json, search_text: page.search_text,
+  }));
+  for (let offset = 0; offset < rows.length; offset += 40) {
+    const { error } = await db.from('study_pages').insert(rows.slice(offset, offset + 40));
+    if (error) throw error;
+  }
+  const { error: updateError } = await db.from('study_files')
+    .update({ ingested: true, clauses: rows.length }).eq('id', file.id);
+  if (updateError) throw updateError;
+  return { status: 'completed', clauses: rows.length, pages_processed: extracted.pageCount, pages_total: extracted.pageCount };
+}
+
 const api = {
   async call(path, { method = 'GET', body, form } = {}) {
     const db = window.darsyncSupabase;
@@ -509,26 +549,87 @@ const api = {
     const verb = method.toUpperCase();
 
     if (path === '/api/auth/me') return { user: state.user };
-    if (path === '/api/status') return { online: false, provider: 'NVIDIA', chat_model: 'Edge Function not connected' };
+    if (path === '/api/status') return { online: false, provider: 'NVIDIA', chat_model: 'Configure Edge Function secrets' };
 
     if (path === '/api/taxonomy' && verb === 'GET') {
       const { data, error } = await db.from('taxonomy').select('id,type,name').order('name');
       fail(error);
       const result = { country: [], category: [], subcategory: [], test: [] };
-      (data || []).forEach((row) => { if (result[row.type]) result[row.type].push(row); });
+      (data || []).forEach(row => { if (result[row.type]) result[row.type].push(row); });
       return result;
     }
+    if (path === '/api/taxonomy' && verb === 'POST') {
+      const { data, error } = await db.from('taxonomy').insert({ type: body.type, name: body.name }).select().single();
+      fail(error); return data;
+    }
+    if (parts[0] === 'api' && parts[1] === 'taxonomy' && parts[2] && verb === 'DELETE') {
+      const { error } = await db.from('taxonomy').delete().eq('id', parts[2]); fail(error); return { ok: true };
+    }
+
     if (path === '/api/files' && verb === 'GET') {
       const { data, error } = await db.from('study_files').select('*').order('created_at', { ascending: false });
       fail(error);
       return { files: (data || []).map(f => ({ ...f, clauses: f.clauses || 0, ingested: !!f.ingested })) };
     }
+    if (path === '/api/files/upload' && verb === 'POST' && form) {
+      const pdfs = form.getAll('files');
+      const uploaded = [];
+      for (const file of pdfs) {
+        if (!(file instanceof File) || !file.name.toLowerCase().endsWith('.pdf')) continue;
+        if (file.size > 100 * 1024 * 1024) throw new Error(`${file.name} exceeds the 100 MB PDF limit.`);
+        const fileId = crypto.randomUUID();
+        const safeName = file.name.replace(/[^\p{L}\p{N}._-]+/gu, '_').slice(0, 120) || 'study.pdf';
+        const storagePath = `${state.user.id}/${fileId}/${safeName}`;
+        const { error: storageError } = await db.storage.from('study-pdfs').upload(storagePath, file, {
+          contentType: 'application/pdf', upsert: false,
+        });
+        fail(storageError);
+        const row = {
+          id: fileId, filename: file.name, storage_path: storagePath, size: file.size,
+          country: form.get('country'), category: form.get('category'),
+          subcategory: form.get('subcategory'), test: form.get('test'),
+          uploaded_by: state.user.id, clauses: 0, ingested: false,
+        };
+        const { data, error } = await db.from('study_files').insert(row).select().single();
+        if (error) {
+          await db.storage.from('study-pdfs').remove([storagePath]);
+          fail(error);
+        }
+        uploaded.push(data);
+      }
+      if (!uploaded.length) throw new Error('No valid PDF files were selected.');
+      return { uploaded, count: uploaded.length };
+    }
+    if (parts[0] === 'api' && parts[1] === 'files' && parts[2]) {
+      const fileId = parts[2];
+      if (parts[3] === 'ingest' && verb === 'POST') return await indexHostedStudyFile(fileId);
+      if (parts[3] === 'reindex' && verb === 'POST') return await indexHostedStudyFile(fileId);
+      if (parts[3] === 'scope' && verb === 'POST') {
+        const { error: fileError } = await db.from('study_files').update(body).eq('id', fileId);
+        fail(fileError);
+        const { error: pagesError } = await db.from('study_pages').update(body).eq('file_id', fileId);
+        fail(pagesError);
+        const { count, error } = await db.from('study_pages').select('id', { count: 'exact', head: true }).eq('file_id', fileId);
+        fail(error); return { updated: count || 0 };
+      }
+      if (parts.length === 3 && verb === 'DELETE') {
+        const { data: file, error: readError } = await db.from('study_files').select('storage_path').eq('id', fileId).single();
+        fail(readError);
+        const { error: storageError } = await db.storage.from('study-pdfs').remove([file.storage_path]);
+        fail(storageError);
+        const { error } = await db.from('study_files').delete().eq('id', fileId);
+        fail(error); return { ok: true };
+      }
+    }
+
     if (path === '/api/chats' && verb === 'GET') {
       const { data, error } = await db.from('chats').select('*').order('updated_at', { ascending: false });
       fail(error); return { chats: data || [] };
     }
     if (path === '/api/chats' && verb === 'POST') {
-      const { data, error } = await db.from('chats').insert({ ...body, user_id: state.user.id }).select('*').single();
+      const { data, error } = await db.from('chats').insert({
+        ...body, user_id: state.user.id, updated_at: new Date().toISOString(),
+      }).select('*').single();
       fail(error); return data;
     }
     if (parts[0] === 'api' && parts[1] === 'chats' && parts[2] && parts.length === 3) {
@@ -536,16 +637,20 @@ const api = {
       if (verb === 'GET') {
         const [{ data: chat, error: chatError }, { data: messages, error: msgError }] = await Promise.all([
           db.from('chats').select('*').eq('id', id).single(),
-          db.from('messages').select('*').eq('chat_id', id).order('created_at')
+          db.from('messages').select('*').eq('chat_id', id).order('created_at'),
         ]);
         fail(chatError); fail(msgError);
-        return { ...chat, messages: messages || [] };
+        return { chat, messages: (messages || []).map(m => ({ ...m, sources: m.sources || [], qa: m.qa || null })) };
+      }
+      if (verb === 'PATCH') {
+        const { error } = await db.from('chats').update({ title: body.title, updated_at: new Date().toISOString() }).eq('id', id);
+        fail(error); return { ok: true, title: body.title };
       }
       if (verb === 'DELETE') {
         const { error } = await db.from('chats').delete().eq('id', id); fail(error); return { ok: true };
       }
     }
-    throw new Error('This feature is not connected to the hosted backend yet. Existing local FastAPI routes are not available on GitHub Pages.');
+    throw new Error('This feature is not connected to Supabase yet. It is not safe to run the old local FastAPI route on GitHub Pages.');
   },
 };
 
