@@ -211,10 +211,28 @@ alter table public.study_index_jobs enable row level security;
 create policy "profiles_read_self_or_admin" on public.profiles
 for select to authenticated
 using (id = (select auth.uid()) or (select public.is_darsync_admin()));
-create policy "profiles_admin_update" on public.profiles
+-- Only the super administrator may change profile roles or permissions.
+-- A regular admin must never be able to promote their own account.
+create or replace function public.is_darsync_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1 from public.profiles p
+    where p.id = (select auth.uid())
+      and p.role = 'super_admin'
+  );
+$;
+
+drop policy if exists "profiles_admin_update" on public.profiles;
+drop policy if exists "profiles_super_admin_update" on public.profiles;
+create policy "profiles_super_admin_update" on public.profiles
 for update to authenticated
-using ((select public.is_darsync_admin()))
-with check ((select public.is_darsync_admin()));
+using ((select public.is_darsync_super_admin()))
+with check ((select public.is_darsync_super_admin()));
 
 create policy "taxonomy_read_authenticated" on public.taxonomy
 for select to authenticated using (true);
