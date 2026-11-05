@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
           const response = await fetch(nvidiaUrl, {
             method: "POST",
             headers: { Authorization: `Bearer ${nvidiaKey}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-            signal: AbortSignal.timeout(105_000),
+            signal: AbortSignal.timeout(55_000),
             body: JSON.stringify({
               model, messages, max_tokens: 2048, seed: 0, reasoning_effort: "low",
               temperature: 0.2, top_p: 0.95, stream: true,
