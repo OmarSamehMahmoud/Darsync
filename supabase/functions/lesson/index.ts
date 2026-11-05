@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
             emit("segment", { index: i + 1, total: hits.length });
             if (i) { fullAnswer += "\n\n"; emit("token", "\n\n"); }
             const hit = hits[i];
-            const prompt = `Course: ${scope.country} / ${scope.category} / ${scope.subcategory} / ${scope.test}.\nStudent request: ${question}\n\nTeach only SOURCE EXCERPT ${i + 1}. Start exactly with "SEGMENT ${i + 1}: " and a brief title on the same line. Then give the spoken explanation.\n\nStudy material:\n${buildContext([hit].map((h) => ({ ...h, number: h.number || `PDF page ${h.page}` } )).replace("[SOURCE EXCERPT 1]", `[SOURCE EXCERPT ${i + 1}]`)}`;
+            const prompt = `Course: ${scope.country} / ${scope.category} / ${scope.subcategory} / ${scope.test}.\nStudent request: ${question}\n\nTeach only SOURCE EXCERPT ${i + 1}. Start exactly with "SEGMENT ${i + 1}: " and a brief title on the same line. Then give the spoken explanation.\n\nStudy material:\n${buildContext([{ ...hit, number: hit.number || `PDF page ${hit.page}` }]).replace("[SOURCE EXCERPT 1]", `[SOURCE EXCERPT ${i + 1}]`)}`;
             await sendNvidia([{ role: "system", content: system }, { role: "user", content: prompt }], i + 1);
           }
         } else {
