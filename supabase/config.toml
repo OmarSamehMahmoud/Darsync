@@ -1,0 +1,6 @@
+# Keep JWT verification enabled for both authenticated endpoints.
+[functions.lesson]
+verify_jwt = true
+
+[functions.admin-users]
+verify_jwt = true
