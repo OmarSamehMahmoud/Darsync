@@ -1635,34 +1635,57 @@ $('chatForm').addEventListener('submit', async (e) => {
     if (lessonMode) {
       let totalSegments = 0;
       for (let index = 0; index < 8; index++) {
-        let segmentText = ''; let segmentDone = false;
-        const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
-          method: 'POST', signal: controller.signal, headers: requestHeaders,
-          body: JSON.stringify({ ...basePayload, lesson_segment_index: index }),
-        });
-        await readSse(res, (event, data) => {
-          if (event === 'lesson_meta') totalSegments = Number(JSON.parse(data).total) || 0;
-          else if (event === 'sources') {
-            const oneSource = JSON.parse(data)[0];
-            if (oneSource) lessonSources[index] = oneSource;
-            setLessonSources(lessonSources);
-          } else if (event === 'segment') {
-            const progress = JSON.parse(data), current = index + 1;
-            $('lessonProgress').textContent = currentLanguage === 'ar'
-              ? `${current.toLocaleString('ar-EG')} / ${totalSegments.toLocaleString('ar-EG')} مقاطع`
-              : `${current} / ${totalSegments} segments`;
-            $('playerProgressLabel').textContent = $('lessonProgress').textContent;
-            $('playerProgressBar').style.width = `${(current / totalSegments) * 100}%`;
-            $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
-              ? `معلمك بيجهز المقطع ${current.toLocaleString('ar-EG')} من ${totalSegments.toLocaleString('ar-EG')}...`
-              : `Your teacher is preparing segment ${current} of ${totalSegments}…`;
-          } else if (event === 'token') {
-            segmentText += JSON.parse(data);
-            textEl.textContent = acc + segmentText; textEl.appendChild(cursor); scrollChat();
-          } else if (event === 'error') throw new Error(JSON.parse(data));
-          else if (event === 'done') segmentDone = true;
-        });
-        if (!segmentDone || !segmentText.trim()) throw new Error(`Lesson segment ${index + 1} did not finish. You can retry the lesson.`);
+        let segmentText = '';
+        let segmentDone = false;
+        let lastSegmentError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          segmentText = '';
+          segmentDone = false;
+          textEl.textContent = acc;
+          try {
+            const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
+              method: 'POST', signal: controller.signal, headers: requestHeaders,
+              body: JSON.stringify({ ...basePayload, lesson_segment_index: index }),
+            });
+            await readSse(res, (event, data) => {
+              if (event === 'lesson_meta') totalSegments = Number(JSON.parse(data).total) || 0;
+              else if (event === 'sources') {
+                const oneSource = JSON.parse(data)[0];
+                if (oneSource) lessonSources[index] = oneSource;
+                setLessonSources(lessonSources);
+              } else if (event === 'segment') {
+                const progress = JSON.parse(data), current = index + 1;
+                $('lessonProgress').textContent = currentLanguage === 'ar'
+                  ? `${current.toLocaleString('ar-EG')} / ${totalSegments.toLocaleString('ar-EG')} مقاطع`
+                  : `${current} / ${totalSegments} segments`;
+                $('playerProgressLabel').textContent = $('lessonProgress').textContent;
+                $('playerProgressBar').style.width = `${(current / totalSegments) * 100}%`;
+                $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
+                  ? `معلمك بيجهز المقطع ${current.toLocaleString('ar-EG')} من ${totalSegments.toLocaleString('ar-EG')}...`
+                  : `Your teacher is preparing segment ${current} of ${totalSegments}…`;
+              } else if (event === 'token') {
+                segmentText += JSON.parse(data);
+                textEl.textContent = acc + segmentText; textEl.appendChild(cursor); scrollChat();
+              } else if (event === 'error') throw new Error(JSON.parse(data));
+              else if (event === 'done') segmentDone = true;
+            });
+            if (!segmentDone || !segmentText.trim()) throw new Error(`Lesson segment ${index + 1} did not finish.`);
+            lastSegmentError = null;
+            break;
+          } catch (error) {
+            if (controller.signal.aborted || error.name === 'AbortError') throw error;
+            lastSegmentError = error;
+            if (attempt < 3) {
+              $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
+                ? `هنعيد المحاولة للمقطع ${(index + 1).toLocaleString('ar-EG')}...`
+                : `Retrying segment ${index + 1} (attempt ${attempt + 1}/3)…`;
+              await new Promise(resolve => setTimeout(resolve, 900 * attempt));
+            }
+          }
+        }
+        if (lastSegmentError || !segmentDone || !segmentText.trim()) {
+          throw new Error(`Lesson segment ${index + 1} failed after 3 attempts: ${lastSegmentError?.message || 'empty response'}`);
+        }
         const normalized = segmentText.replace(/SEGMENT\s+1\s*:/i, `SEGMENT ${index + 1}:`).trim();
         acc += (acc ? '\n\n' : '') + normalized;
         textEl.textContent = acc; textEl.appendChild(cursor);
