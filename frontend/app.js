@@ -581,7 +581,7 @@ function escapeHtml(s) {
 
 function fmtDate(ts) {
   if (!ts) return '';
-  const d = new Date(ts * 1000);
+  const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts);
   const locale = currentLanguage === 'ar' ? 'ar-EG' : 'en-US';
   return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' }) + ' · ' +
          d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
