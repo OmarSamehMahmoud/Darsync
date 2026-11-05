@@ -67,7 +67,6 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const nvidiaKey = Deno.env.get("NVIDIA_API_KEY");
   const nvidiaUrl = (Deno.env.get("NVIDIA_API_URL") || "https://integrate.api.nvidia.com/v1/chat/completions").replace(/\/$/, "");
-  const model = Deno.env.get("NVIDIA_CHAT_MODEL") || "minimaxai/minimax-m3.1-flash";
   if (!nvidiaKey) return json({ detail: "NVIDIA_API_KEY is not configured in Supabase Edge Function secrets." }, 503);
 
   const supabase = createClient(supabaseUrl, anonKey, {
@@ -82,11 +81,23 @@ Deno.serve(async (req) => {
   const chatId = String(body.chat_id || "");
   const question = String(body.question || "").trim();
   const lessonMode = body.lesson_mode === true;
+  const model = lessonMode ? "nvidia/nemotron-3.5-bolt-e4b" : (Deno.env.get("NVIDIA_CHAT_MODEL") || "minimaxai/minimax-m3.1-flash");
   if (!chatId || !question) return json({ detail: "chat_id and question are required." }, 400);
 
   const { data: chat, error: chatError } = await supabase.from("chats").select("*").eq("id", chatId).single();
   if (chatError || !chat || (chat.user_id !== authData.user.id)) {
     return json({ detail: "Chat not found or access denied." }, 404);
+  }
+  if (body.finalize_lesson === true) {
+    const content = String(body.content || "").trim();
+    const finalSources = Array.isArray(body.sources) ? body.sources : [];
+    if (!content || !finalSources.length) return json({ detail: "Lesson content and sources are required." }, 400);
+    const { error: userSaveError } = await supabase.from("messages").insert({ chat_id: chatId, role: "user", content: question });
+    if (userSaveError) return json({ detail: userSaveError.message }, 500);
+    const { error: answerSaveError } = await supabase.from("messages").insert({ chat_id: chatId, role: "assistant", content, sources: finalSources });
+    if (answerSaveError) return json({ detail: answerSaveError.message }, 500);
+    await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+    return json({ ok: true });
   }
   const scope = {
     country: chat.country || "", category: chat.category || "",
@@ -122,8 +133,16 @@ Deno.serve(async (req) => {
   if (!hits.length) {
     return json({ detail: "No indexed PDF pages were found for this course selection. Upload and index a study PDF first." }, 409);
   }
+  const totalLessonSegments = hits.length;
+  const segmentIndex = Number(body.lesson_segment_index);
+  if (lessonMode && Number.isInteger(segmentIndex) && segmentIndex >= 0) {
+    if (segmentIndex >= totalLessonSegments) return json({ detail: "Lesson segment index is out of range." }, 400);
+    hits = [hits[segmentIndex]];
+  } else if (lessonMode && body.lesson_segment_index !== undefined) {
+    return json({ detail: "Invalid lesson segment index." }, 400);
+  }
 
-  const sources = hits.map(sourceFromHit);
+  const sources = hits.map((hit, index) => sourceFromHit(hit, lessonMode && Number.isInteger(segmentIndex) ? segmentIndex : index));
   const { data: previousMessages } = lessonMode
     ? { data: [] as any[] }
     : await supabase.from("messages").select("role,content,qa").eq("chat_id", chatId).order("created_at", { ascending: false }).limit(12);
@@ -135,6 +154,7 @@ Deno.serve(async (req) => {
       const emit = (event: string, data: unknown) => controller.enqueue(enc.encode(sse(event, data)));
       let fullAnswer = "";
       try {
+        emit("lesson_meta", { total: totalLessonSegments });
         emit("sources", sources);
         if (!lessonMode) {
           const { error } = await supabase.from("messages").insert({ chat_id: chatId, role: "user", content: question });
@@ -155,7 +175,8 @@ Deno.serve(async (req) => {
             headers: { Authorization: `Bearer ${nvidiaKey}`, "Content-Type": "application/json", Accept: "text/event-stream" },
             signal: AbortSignal.timeout(55_000),
             body: JSON.stringify({
-              model, messages, max_tokens: 2048, seed: 0, reasoning_effort: "low",
+              model, messages, max_tokens: lessonMode ? 480 : 2048, seed: 0,
+              ...(lessonMode ? {} : { reasoning_effort: "low" }),
               temperature: 0.2, top_p: 0.95, stream: true,
             }),
           });
@@ -223,20 +244,21 @@ Deno.serve(async (req) => {
 
         if (lessonMode) {
           const context = buildContext(hits);
+          const globalIndex = Number.isInteger(segmentIndex) ? segmentIndex + 1 : 1;
           const prompt = `Course: ${scope.country} / ${scope.category} / ${scope.subcategory} / ${scope.test}.
 Student request: ${question}
 
-Create one complete lesson covering ALL supplied source excerpts in their original order.
-Return exactly one segment for every excerpt, with no introduction or conclusion.
-For excerpt N, start a new line with exactly "SEGMENT N: " followed by a short navigation title on the same line, then 2-3 concise spoken sentences in friendly Egyptian Arabic.
-Use the same numbering as the [SOURCE EXCERPT N] labels. Do not merge, skip, reorder, or invent excerpts. If an excerpt is unclear, say so rather than guessing.
+Teach ONLY this one supplied excerpt as one self-contained lesson segment.
+Return exactly one segment and no introduction or conclusion.
+Start with exactly "SEGMENT 1: " followed by a short navigation title on the same line, then 2-3 concise spoken sentences in friendly Egyptian Arabic.
+Do not invent facts. If the excerpt is unclear, say so rather than guessing.
 
 Study material:
 ${context}`;
           await sendNvidia([
             { role: "system", content: system },
             { role: "user", content: prompt },
-          ], hits.length);
+          ], 1);
         } else {
           const context = buildContext(hits);
           const userPrompt = `Study-material context:\n${context}\n\nStudent request: ${question}`;
@@ -248,14 +270,16 @@ ${context}`;
         }
 
         const { error: saveUserError } = lessonMode
-          ? await supabase.from("messages").insert({ chat_id: chatId, role: "user", content: question })
+          ? { error: null }
           : { error: null };
         if (saveUserError) throw new Error(saveUserError.message);
-        const { error: saveAnswerError } = await supabase.from("messages").insert({
-          chat_id: chatId, role: "assistant", content: fullAnswer, sources,
-        });
-        if (saveAnswerError) throw new Error(saveAnswerError.message);
-        await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+        if (!lessonMode) {
+          const { error: saveAnswerError } = await supabase.from("messages").insert({
+            chat_id: chatId, role: "assistant", content: fullAnswer, sources,
+          });
+          if (saveAnswerError) throw new Error(saveAnswerError.message);
+          await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+        }
         emit("done", {});
       } catch (error) {
         emit("error", error instanceof Error ? error.message : String(error));
