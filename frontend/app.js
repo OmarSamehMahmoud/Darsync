@@ -1606,78 +1606,151 @@ $('chatForm').addEventListener('submit', async (e) => {
     const { data: sessionData, error: sessionError } = await window.darsyncSupabase.auth.getSession();
     if (sessionError || !sessionData.session) throw new Error('Your session expired. Please sign in again.');
     state.token = sessionData.session.access_token;
-    const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: supabaseConfig.publishableKey,
-        Authorization: `Bearer ${state.token}`,
-      },
-      body: JSON.stringify({
-        chat_id: state.currentChat.id,
-        question,
-        lesson_mode: lessonMode,
-        retrieval_query: [
-          state.currentChat.country,
-          state.currentChat.category,
-          state.currentChat.subcategory,
-          state.currentChat.test,
-        ].filter(Boolean).join(' '),
-      }),
-    });
-    if (!res.ok || !res.body) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || `Stream failed (${res.status})`);
-    }
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      apikey: supabaseConfig.publishableKey,
+      Authorization: `Bearer ${state.token}`,
+    };
+    const basePayload = {
+      chat_id: state.currentChat.id, question, lesson_mode: lessonMode,
+      retrieval_query: [state.currentChat.country, state.currentChat.category, state.currentChat.subcategory, state.currentChat.test].filter(Boolean).join(' '),
+    };
+    const readSse = async (res, onEvent) => {
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Stream failed (${res.status})`);
+      }
+      const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (state.streamController !== controller) throw new DOMException('Cancelled', 'AbortError');
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n'); buffer = parts.pop() || '';
+        for (const part of parts) handleEvent(part, onEvent);
+      }
+      if (buffer.trim()) handleEvent(buffer, onEvent);
+    };
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (state.streamController !== controller) break;
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop();
-      for (const part of parts) handleEvent(part, (event, data) => {
-        if (event === 'sources') {
-          const sources = JSON.parse(data);
-          lessonSources = sources;
-          setLessonSources(sources);
-          if (!lessonMode) body.appendChild(buildSources(sources));
-          scrollChat();
-        } else if (event === 'segment') {
-          const progress = JSON.parse(data);
-          $('lessonProgress').textContent = currentLanguage === 'ar'
-            ? `${Number(progress.index).toLocaleString('ar-EG')} / ${Number(progress.total).toLocaleString('ar-EG')} مقاطع`
-            : `${progress.index} / ${progress.total} segments`;
-          $('playerProgressLabel').textContent = $('lessonProgress').textContent;
-          $('playerProgressBar').style.width = `${(progress.index / progress.total) * 100}%`;
-          $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
-            ? `معلمك بيجهز المقطع ${Number(progress.index).toLocaleString('ar-EG')} من ${Number(progress.total).toLocaleString('ar-EG')}...`
-            : `Your teacher is preparing segment ${progress.index} of ${progress.total}…`;
-        } else if (event === 'qa') {
-          const qa = JSON.parse(data);
-          if (qa.rejected) {
-            rejectedLesson = true;
-            toast(`Lesson needs review (${qa.score}/100)`, 'error');
-          }
-        } else if (event === 'token') {
-          acc += JSON.parse(data);
-          textEl.textContent = acc;
-          textEl.appendChild(cursor);
-          scrollChat();
-        } else if (event === 'error') {
-          throw new Error(JSON.parse(data));
-        } else if (event === 'done') {
-          streamCompleted = true;
-        }
+    if (lessonMode) {
+      let totalSegments = 0;
+      for (let index = 0; index < (totalSegments || 1); index++) {
+        let segmentText = ''; let segmentDone = false;
+        const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
+          method: 'POST', signal: controller.signal, headers: requestHeaders,
+          body: JSON.stringify({ ...basePayload, lesson_segment_index: index }),
+        });
+        await readSse(res, (event, data) => {
+          if (event === 'lesson_meta') totalSegments = Number(JSON.parse(data).total) || 0;
+          else if (event === 'sources') {
+            const oneSource = JSON.parse(data)[0];
+            if (oneSource) lessonSources[index] = oneSource;
+            setLessonSources(lessonSources);
+          } else if (event === 'segment') {
+            const progress = JSON.parse(data), current = index + 1;
+            $('lessonProgress').textContent = currentLanguage === 'ar'
+              ? `${current.toLocaleString('ar-EG')} / ${totalSegments.toLocaleString('ar-EG')} مقاطع`
+              : `${current} / ${totalSegments} segments`;
+            $('playerProgressLabel').textContent = $('lessonProgress').textContent;
+            $('playerProgressBar').style.width = `${(current / totalSegments) * 100}%`;
+            $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
+              ? `معلمك بيجهز المقطع ${current.toLocaleString('ar-EG')} من ${totalSegments.toLocaleString('ar-EG')}...`
+              : `Your teacher is preparing segment ${current} of ${totalSegments}…`;
+          } else if (event === 'token') {
+            segmentText += JSON.parse(data);
+            textEl.textContent = acc + segmentText; textEl.appendChild(cursor); scrollChat();
+          } else if (event === 'error') throw new Error(JSON.parse(data));
+          else if (event === 'done') segmentDone = true;
+        });
+        if (!segmentDone || !segmentText.trim()) throw new Error(`Lesson segment ${index + 1} did not finish. You can retry the lesson.`);
+        const normalized = segmentText.replace(/SEGMENT\s+1\s*:/i, `SEGMENT ${index + 1}:`).trim();
+        acc += (acc ? '\n\n' : '') + normalized;
+        textEl.textContent = acc; textEl.appendChild(cursor);
+        if (index === 0 && totalSegments < 1) throw new Error('The lesson returned an invalid segment count.');
+      }
+      const finalizeRes = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
+        method: 'POST', signal: controller.signal, headers: requestHeaders,
+        body: JSON.stringify({ ...basePayload, finalize_lesson: true, content: acc, sources: lessonSources }),
       });
+      if (!finalizeRes.ok) {
+        const errData = await finalizeRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Could not save lesson (${finalizeRes.status})`);
+      }
+      streamCompleted = true;
+    } else {
+      const res = await fetch(`${supabaseConfig.url}/functions/v1/lesson`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseConfig.publishableKey,
+          Authorization: `Bearer ${state.token}`,
+        },
+        body: JSON.stringify({
+          chat_id: state.currentChat.id,
+          question,
+          lesson_mode: lessonMode,
+          retrieval_query: [
+            state.currentChat.country,
+            state.currentChat.category,
+            state.currentChat.subcategory,
+            state.currentChat.test,
+          ].filter(Boolean).join(' '),
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Stream failed (${res.status})`);
+      }
+  
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+  
+      while (true) {
+        const { done, value } = await reader.read();
+        if (state.streamController !== controller) break;
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+        for (const part of parts) handleEvent(part, (event, data) => {
+          if (event === 'sources') {
+            const sources = JSON.parse(data);
+            lessonSources = sources;
+            setLessonSources(sources);
+            if (!lessonMode) body.appendChild(buildSources(sources));
+            scrollChat();
+          } else if (event === 'segment') {
+            const progress = JSON.parse(data);
+            $('lessonProgress').textContent = currentLanguage === 'ar'
+              ? `${Number(progress.index).toLocaleString('ar-EG')} / ${Number(progress.total).toLocaleString('ar-EG')} مقاطع`
+              : `${progress.index} / ${progress.total} segments`;
+            $('playerProgressLabel').textContent = $('lessonProgress').textContent;
+            $('playerProgressBar').style.width = `${(progress.index / progress.total) * 100}%`;
+            $('lessonSourcePreviewMessage').textContent = currentLanguage === 'ar'
+              ? `معلمك بيجهز المقطع ${Number(progress.index).toLocaleString('ar-EG')} من ${Number(progress.total).toLocaleString('ar-EG')}...`
+              : `Your teacher is preparing segment ${progress.index} of ${progress.total}…`;
+          } else if (event === 'qa') {
+            const qa = JSON.parse(data);
+            if (qa.rejected) {
+              rejectedLesson = true;
+              toast(`Lesson needs review (${qa.score}/100)`, 'error');
+            }
+          } else if (event === 'token') {
+            acc += JSON.parse(data);
+            textEl.textContent = acc;
+            textEl.appendChild(cursor);
+            scrollChat();
+          } else if (event === 'error') {
+            throw new Error(JSON.parse(data));
+          } else if (event === 'done') {
+            streamCompleted = true;
+          }
+        });
+      }
+      if (!streamCompleted) throw new Error('The lesson stream ended before the presentation was complete.');
     }
-    if (!streamCompleted) throw new Error('The lesson stream ended before the presentation was complete.');
   } catch (err) {
     if (controller.signal.aborted || err.name === 'AbortError') return;
     toast(err.message, 'error');
