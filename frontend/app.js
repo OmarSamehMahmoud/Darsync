@@ -650,6 +650,63 @@ const api = {
         const { error } = await db.from('chats').delete().eq('id', id); fail(error); return { ok: true };
       }
     }
+    if (path === '/api/feedback' && verb === 'POST') {
+      const { data, error } = await db.from('feedback').insert({
+        user_id: state.user.id, username: state.user.username,
+        type: body.type, title: body.title || null, message: body.message,
+      }).select().single();
+      fail(error); return { ok: true, id: data.id, type: data.type };
+    }
+    if (path === '/api/feedback/my' && verb === 'GET') {
+      const { data, error } = await db.from('feedback').select('*').is('deleted_at', null).order('created_at', { ascending: false });
+      fail(error); return { items: data || [] };
+    }
+    if (path === '/api/feedback' && verb === 'GET') {
+      const { data, error } = await db.from('feedback').select('*').is('deleted_at', null)
+        .order('read_at', { ascending: true, nullsFirst: true }).order('created_at', { ascending: false });
+      fail(error); return { items: data || [] };
+    }
+    if (path === '/api/feedback/unread-count' && verb === 'GET') {
+      const { count, error } = await db.from('feedback').select('id', { count: 'exact', head: true })
+        .is('read_at', null).is('deleted_at', null);
+      fail(error); return { count: count || 0 };
+    }
+    if (parts[0] === 'api' && parts[1] === 'feedback' && parts[2]) {
+      const id = parts[2];
+      if (parts[3] === 'read' && verb === 'POST') {
+        const { error } = await db.from('feedback').update({ read_at: new Date().toISOString() }).eq('id', id);
+        fail(error); return { ok: true };
+      }
+      if (parts[3] === 'reply' && verb === 'POST') {
+        const { error } = await db.from('feedback').update({
+          admin_reply: body.message, replied_at: new Date().toISOString(), read_at: new Date().toISOString(),
+        }).eq('id', id);
+        fail(error); return { ok: true };
+      }
+      if (parts.length === 3 && verb === 'DELETE') {
+        const { error } = await db.from('feedback').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+        fail(error); return { ok: true };
+      }
+    }
+    if (path === '/api/admin/users' && (verb === 'GET' || verb === 'POST')) {
+      const { data, error } = await db.functions.invoke('admin-users', {
+        body: verb === 'GET' ? { action: 'list' } : {
+          action: 'create', email: body.email, password: body.password, role: body.role,
+        },
+      });
+      fail(error); if (data?.detail) throw new Error(data.detail); return data;
+    }
+    if (parts[0] === 'api' && parts[1] === 'admin' && parts[2] === 'users' && parts[3]) {
+      const userId = parts[3];
+      let actionBody = null;
+      if (parts[4] === 'role' && verb === 'PATCH') actionBody = { action: 'role', user_id: userId, role: body.role };
+      else if (parts[4] === 'permissions' && verb === 'PATCH') actionBody = { action: 'permissions', user_id: userId, permissions: body.permissions };
+      else if (parts.length === 4 && verb === 'DELETE') actionBody = { action: 'delete', user_id: userId };
+      if (actionBody) {
+        const { data, error } = await db.functions.invoke('admin-users', { body: actionBody });
+        fail(error); if (data?.detail) throw new Error(data.detail); return data;
+      }
+    }
     throw new Error('This feature is not connected to Supabase yet. It is not safe to run the old local FastAPI route on GitHub Pages.');
   },
 };
@@ -2258,7 +2315,7 @@ async function renderUsers() {
     <h4>➕ Add new account</h4>
     <div class="tax-block">
       <div class="user-create-form">
-        <input id="newUserName" type="text" placeholder="Username" />
+        <input id="newUserName" type="email" placeholder="Email address" autocomplete="email" />
         <input id="newUserPass" type="password" placeholder="Password" />
         <select id="newUserRole">
           <option value="user">User</option>
@@ -2276,11 +2333,11 @@ async function renderUsers() {
       const username = $('newUserName').value.trim();
       const password = $('newUserPass').value;
       const role = $('newUserRole').value;
-      if (!username || !password) { toast('Enter username and password first', 'error'); return; }
+      if (!username || !password) { toast('Enter email and password first', 'error'); return; }
       try {
         await api.call('/api/admin/users', {
           method: 'POST',
-          body: { username, password, role, permissions: defaultUserPermissions(role) }
+          body: { email: username, password, role }
         });
         toast(`${role === 'admin' ? 'Admin' : 'User'} created`);
         $('newUserName').value = '';
