@@ -518,11 +518,8 @@ async function indexHostedStudyFile(fileId) {
   });
   if (!extracted.pages.length) throw new Error('No readable text was found in this PDF. It may be blank or protected.');
   const generationId = crypto.randomUUID();
-  const { error: docError } = await db.from('study_documents')
-    .upsert({ doc_id: file.id, generation_id: generationId }, { onConflict: 'doc_id' });
-  if (docError) throw docError;
-  const { error: clearError } = await db.from('study_pages').delete().eq('file_id', file.id);
-  if (clearError) throw clearError;
+  const { data: previousDoc } = await db.from('study_documents')
+    .select('generation_id').eq('doc_id', file.id).maybeSingle();
   const rows = extracted.pages.map(page => ({
     doc_id: file.id, generation_id: generationId, file_id: file.id,
     page: page.page, part: page.part, number: page.number, title: page.title,
@@ -532,7 +529,21 @@ async function indexHostedStudyFile(fileId) {
   }));
   for (let offset = 0; offset < rows.length; offset += 40) {
     const { error } = await db.from('study_pages').insert(rows.slice(offset, offset + 40));
-    if (error) throw error;
+    if (error) {
+      await db.from('study_pages').delete().eq('file_id', file.id).eq('generation_id', generationId);
+      throw error;
+    }
+  }
+  const { error: docError } = await db.from('study_documents')
+    .upsert({ doc_id: file.id, generation_id: generationId }, { onConflict: 'doc_id' });
+  if (docError) {
+    await db.from('study_pages').delete().eq('file_id', file.id).eq('generation_id', generationId);
+    throw docError;
+  }
+  if (previousDoc?.generation_id) {
+    const { error: clearError } = await db.from('study_pages').delete()
+      .eq('file_id', file.id).neq('generation_id', generationId);
+    if (clearError) console.warn('Old PDF index cleanup failed:', clearError.message);
   }
   const { error: updateError } = await db.from('study_files')
     .update({ ingested: true, clauses: rows.length }).eq('id', file.id);
