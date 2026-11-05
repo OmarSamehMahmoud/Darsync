@@ -634,7 +634,7 @@ const api = {
     }
 
     if (path === '/api/chats' && verb === 'GET') {
-      const { data, error } = await db.from('chats').select('*').order('updated_at', { ascending: false });
+      const { data, error } = await db.from('chats').select('*').eq('user_id', state.user.id).order('updated_at', { ascending: false });
       fail(error); return { chats: data || [] };
     }
     if (path === '/api/chats' && verb === 'POST') {
@@ -647,18 +647,18 @@ const api = {
       const id = parts[2];
       if (verb === 'GET') {
         const [{ data: chat, error: chatError }, { data: messages, error: msgError }] = await Promise.all([
-          db.from('chats').select('*').eq('id', id).single(),
+          db.from('chats').select('*').eq('id', id).eq('user_id', state.user.id).single(),
           db.from('messages').select('*').eq('chat_id', id).order('created_at'),
         ]);
         fail(chatError); fail(msgError);
         return { chat, messages: (messages || []).map(m => ({ ...m, sources: m.sources || [], qa: m.qa || null })) };
       }
       if (verb === 'PATCH') {
-        const { error } = await db.from('chats').update({ title: body.title, updated_at: new Date().toISOString() }).eq('id', id);
+        const { error } = await db.from('chats').update({ title: body.title, updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', state.user.id);
         fail(error); return { ok: true, title: body.title };
       }
       if (verb === 'DELETE') {
-        const { error } = await db.from('chats').delete().eq('id', id); fail(error); return { ok: true };
+        const { error } = await db.from('chats').delete().eq('id', id).eq('user_id', state.user.id); fail(error); return { ok: true };
       }
     }
     if (path === '/api/feedback' && verb === 'POST') {
