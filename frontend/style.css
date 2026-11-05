@@ -104,7 +104,7 @@ body {
   pointer-events: none;
   z-index: 1;
   opacity: 0.23;
-  background: url("/static/learning-botanical-bg.svg") center / cover no-repeat;
+  background: url("learning-botanical-bg.svg") center / cover no-repeat;
 }
 [data-theme="dark"] .ambient-art { opacity: 0.13; }
 body.app-active .ambient-art { opacity: 0.16; }
