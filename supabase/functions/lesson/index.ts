@@ -42,11 +42,18 @@ function buildContext(hits: any[]) {
 }
 function rankRows(rows: any[], query: string, topK = 8) {
   const queryTokens = tokens(query);
-  return rows.map((row) => {
+  const ranked = rows.map((row) => {
     const haystack = normalizeArabic(String(row.search_text || row.text || ""));
     const score = queryTokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 + Math.min(token.length, 8) / 10 : 0), 0);
     return { ...row, _score: score };
-  }).filter((row) => row._score > 0).sort((a, b) => b._score - a._score).slice(0, topK);
+  }).filter((row) => row._score > 0).sort((a, b) => b._score - a._score);
+  const seen = new Set<string>();
+  return ranked.filter((row) => {
+    const key = `${row.file_id}:${row.page}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, topK);
 }
 
 Deno.serve(async (req) => {
@@ -93,7 +100,10 @@ Deno.serve(async (req) => {
     .limit(1000);
   const { data: pageRows, error: pagesError } = await pagesQuery;
   if (pagesError) return json({ detail: pagesError.message }, 500);
-  const allRows = pageRows || [];
+  const { data: activeDocuments, error: docsError } = await supabase.from("study_documents").select("doc_id,generation_id");
+  if (docsError) return json({ detail: docsError.message }, 500);
+  const activeGeneration = new Map((activeDocuments || []).map((doc: any) => [doc.doc_id, doc.generation_id]));
+  const allRows = (pageRows || []).filter((row: any) => activeGeneration.get(row.doc_id) === row.generation_id);
   let hits: any[] = [];
 
   if (lessonMode) {
