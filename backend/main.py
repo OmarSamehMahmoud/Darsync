@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import AsyncGenerator, Callable, List
@@ -27,6 +28,9 @@ from .database import now
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Darsync", version="1.0.0")
 
+# Maximum number of accounts across ALL roles (users, admins, and super admins).
+MAX_ACCOUNTS = 5
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,6 +43,14 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup() -> None:
     db.init()
+    # Enforce the account limit inside SQLite itself so simultaneous signup
+    # requests cannot create more than MAX_ACCOUNTS accounts.
+    db.exec(
+        "CREATE TRIGGER IF NOT EXISTS enforce_five_account_limit "
+        "BEFORE INSERT ON users "
+        "WHEN (SELECT COUNT(*) FROM users) >= 5 "
+        "BEGIN SELECT RAISE(ABORT, 'account_limit_reached'); END"
+    )
     db.exec(
         "UPDATE study_index_jobs SET status='failed', "
         "error='Indexing was interrupted by a server restart.', updated_at=? "
@@ -64,6 +76,20 @@ def login(payload: dict):
     }
 
 
+def _account_limit_reached() -> bool:
+    row = db.q1("SELECT COUNT(*) AS account_count FROM users")
+    return bool(row and row["account_count"] >= MAX_ACCOUNTS)
+
+
+def _account_limit_http_error(exc: sqlite3.IntegrityError) -> HTTPException | None:
+    if "account_limit_reached" in str(exc):
+        return HTTPException(
+            status_code=403,
+            detail=f"Registration is closed: the maximum of {MAX_ACCOUNTS} accounts has been reached.",
+        )
+    return None
+
+
 @app.post("/api/auth/signup")
 def signup(payload: dict):
     """Self-service registration — creates a new regular user account."""
@@ -80,11 +106,22 @@ def signup(payload: dict):
 
     if db.q1("SELECT id FROM users WHERE username = ?", username):
         raise HTTPException(status_code=409, detail="Username already taken")
+    if _account_limit_reached():
+        raise HTTPException(
+            status_code=403,
+            detail=f"Registration is closed: the maximum of {MAX_ACCOUNTS} accounts has been reached.",
+        )
 
-    user_id = db.ex(
-        "INSERT INTO users (username, password_hash, role, permissions, created_at) VALUES (?,?,?,?,?)",
-        username, auth.hash_password(password), "user", json.dumps({"update_rag": False, "add_rag": False, "remove_rag": False}), now(),
-    )
+    try:
+        user_id = db.ex(
+            "INSERT INTO users (username, password_hash, role, permissions, created_at) VALUES (?,?,?,?,?)",
+            username, auth.hash_password(password), "user", json.dumps({"update_rag": False, "add_rag": False, "remove_rag": False}), now(),
+        )
+    except sqlite3.IntegrityError as exc:
+        limit_error = _account_limit_http_error(exc)
+        if limit_error:
+            raise limit_error from exc
+        raise
     user = db.q1("SELECT * FROM users WHERE id = ?", user_id)
     return {
         "token": auth.create_token(user),
@@ -161,15 +198,26 @@ def create_user(payload: dict, admin: dict = Depends(auth.require_super_admin)):
         raise HTTPException(status_code=400, detail="Role must be 'user' or 'admin'")
     if db.q1("SELECT id FROM users WHERE username = ?", username):
         raise HTTPException(status_code=409, detail="Username already taken")
+    if _account_limit_reached():
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot create account: the maximum of {MAX_ACCOUNTS} accounts has been reached.",
+        )
 
-    user_id = db.ex(
-        "INSERT INTO users (username, password_hash, role, permissions, created_at) VALUES (?,?,?,?,?)",
-        username,
-        auth.hash_password(password),
-        role,
-        json.dumps(permissions),
-        now(),
-    )
+    try:
+        user_id = db.ex(
+            "INSERT INTO users (username, password_hash, role, permissions, created_at) VALUES (?,?,?,?,?)",
+            username,
+            auth.hash_password(password),
+            role,
+            json.dumps(permissions),
+            now(),
+        )
+    except sqlite3.IntegrityError as exc:
+        limit_error = _account_limit_http_error(exc)
+        if limit_error:
+            raise limit_error from exc
+        raise
     return {"ok": True, "id": user_id, "role": role, "permissions": permissions}
 
 
