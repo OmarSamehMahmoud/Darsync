@@ -97,16 +97,17 @@ Deno.serve(async (req) => {
   let hits: any[] = [];
 
   if (lessonMode) {
-    const seen = new Set<string>();
+    const grouped = new Map<string, any>();
     for (const row of allRows) {
       const key = `${row.file_id}:${row.page}`;
-      if (seen.has(key) || !String(row.text || "").trim()) continue;
-      seen.add(key);
-      hits.push({ ...row, number: `PDF page ${row.page}` });
-      if (hits.length >= 8) break;
+      if (!grouped.has(key)) grouped.set(key, { ...row, text: "", region_json: [], number: `PDF page ${row.page}` });
+      const page = grouped.get(key);
+      if (String(row.text || "").trim()) page.text += (page.text ? "\\n\\n" : "") + row.text;
+      if (Array.isArray(row.region_json)) page.region_json.push(...row.region_json);
     }
+    hits = [...grouped.values()].filter((row) => row.text.trim()).slice(0, 8);
   } else {
-    hits = rankRows(allRows, String(body.retrieval_query || question), 8);
+    hits = rankRows(allRows, `${body.retrieval_query || ""} ${question}`, 8);
   }
   if (!hits.length) {
     return json({ detail: "No indexed PDF pages were found for this course selection. Upload and index a study PDF first." }, 409);
@@ -173,6 +174,20 @@ Deno.serve(async (req) => {
                 fullAnswer += delta;
                 emit("token", delta);
               }
+            }
+          }
+          if (buffer.startsWith("data:")) {
+            const raw = buffer.slice(5).trim();
+            if (raw && raw !== "[DONE]") {
+              try {
+                const packet = JSON.parse(raw);
+                const delta = packet?.choices?.[0]?.delta?.content;
+                if (typeof delta === "string" && delta) {
+                  segmentText += delta;
+                  fullAnswer += delta;
+                  emit("token", delta);
+                }
+              } catch { /* ignore an incomplete final SSE frame */ }
             }
           }
           if (!segmentText.trim()) throw new Error("NVIDIA returned an empty answer.");
