@@ -560,7 +560,11 @@ const api = {
     const verb = method.toUpperCase();
 
     if (path === '/api/auth/me') return { user: state.user };
-    if (path === '/api/status') return { online: false, provider: 'NVIDIA', chat_model: 'Configure Edge Function secrets' };
+    if (path === '/api/status') {
+      const { data, error } = await db.functions.invoke('status', { body: {} });
+      if (error) throw new Error(error.message || 'Could not check NVIDIA status.');
+      return data || { online: false, provider: 'NVIDIA NIM', chat_model: 'Status unavailable' };
+    }
 
     if (path === '/api/taxonomy' && verb === 'GET') {
       const { data, error } = await db.from('taxonomy').select('id,type,name').order('name');
