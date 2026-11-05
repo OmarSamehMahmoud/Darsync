@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^python -m py_compile backend\\\\rag\\.py test_rag_clauses\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

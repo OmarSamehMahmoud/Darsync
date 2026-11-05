@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: darsync
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: PHOTONX_JWT_SECRET
+        generateValue: true
+      - key: PHOTONX_OCR_LANGUAGE
+        value: ar

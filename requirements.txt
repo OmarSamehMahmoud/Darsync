@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+PyMuPDF>=1.24          # PDF text extraction (fitz)
+httpx>=0.27            # NVIDIA OpenAI-compatible API client
+PyJWT>=2.8             # session tokens
+bcrypt>=4.1            # password hashing
+setuptools>=65; python_version < "3.13"  # Required by PaddlePaddle 2.6 at import time
+paddleocr==2.10.0; python_version < "3.13"
+paddlepaddle==2.6.2; python_version < "3.13"

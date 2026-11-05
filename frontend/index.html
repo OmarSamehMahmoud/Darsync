@@ -1,0 +1,559 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Darsync — your AI-powered lecture studio" />
+  <meta name="theme-color" content="#a8794f" />
+  <title>Darsync — AI Lecture Studio</title>
+  <link rel="icon" type="image/png" href="/static/darsync-learning-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/static/style.css?v=21" />
+</head>
+<body>
+
+  <div class="ambient-art" aria-hidden="true"></div>
+
+  <div class="global-controls">
+    <label class="language-switch">
+      <span class="sr-only">Language</span>
+      <select id="languageSelect" aria-label="Language">
+        <option value="ar">العربية</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+    <button class="btn-icon sidebar-toggle" id="sidebarToggle" type="button" aria-label="Hide sidebar" aria-controls="mainSidebar" aria-expanded="true" title="Hide sidebar">
+      <i class="fas fa-bars" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <!-- ===================== LANDING SCREEN ===================== -->
+  <section id="landingScreen" class="screen active">
+    <div class="landing-wrap glass">
+      <div class="landing-brand">
+        <img src="/static/darsync-learning-logo.png" alt="Darsync lecture studio" class="brand-logo" />
+        <p class="landing-sub">Your lectures, taught by an AI teacher</p>
+      </div>
+
+      <div class="pricing-section">
+        <h2 class="pricing-title">Simple Pricing <span class="egp">(EGP)</span></h2>
+        <p class="pricing-sub">Choose your plan and continue learning with your existing account.</p>
+
+        <div class="pricing-grid">
+          <div class="pricing-card featured">
+            <div class="card-head">
+              <h3>Starter</h3>
+              <div class="price"><span class="amount">150</span> <span class="period">/month</span></div>
+            </div>
+            <ul class="features">
+              <li>Up to 5 study materials</li>
+              <li>Teacher-led lessons</li>
+              <li>Presentation-style lesson player</li>
+              <li>1 admin account</li>
+              <li>Email support</li>
+            </ul>
+            <div class="card-foot">
+              <button class="btn btn-primary btn-glow" onclick="goToAuth()">Sign In</button>
+            </div>
+          </div>
+
+          <div class="pricing-card">
+            <div class="card-head">
+              <h3>Professional</h3>
+              <div class="price"><span class="amount">350</span> <span class="period">/month</span></div>
+            </div>
+            <ul class="features">
+              <li>Up to 20 study materials</li>
+              <li>Teacher-led lessons</li>
+              <li>Presentation-style lesson player</li>
+              <li>3 admin accounts</li>
+              <li>User management</li>
+              <li>Priority email support</li>
+            </ul>
+            <div class="card-foot">
+              <button class="btn btn-ghost" onclick="goToAuth()">Sign In</button>
+            </div>
+          </div>
+
+          <div class="pricing-card">
+            <div class="card-head">
+              <h3>Enterprise</h3>
+              <div class="price"><span class="amount">750</span> <span class="period">/month</span></div>
+            </div>
+            <ul class="features">
+              <li>Unlimited study materials</li>
+              <li>Teacher-led lessons</li>
+              <li>Presentation-style lesson player</li>
+              <li>Unlimited admin accounts</li>
+              <li>Full user management</li>
+              <li>Dedicated support</li>
+            </ul>
+            <div class="card-foot">
+              <button class="btn btn-ghost" onclick="goToAuth()">Sign In</button>
+            </div>
+          </div>
+          <div hidden>
+            <div id="chatMessages"></div>
+            <form id="chatForm">
+              <textarea id="chatInput"></textarea>
+              <button type="submit" id="sendBtn"></button>
+            </form>
+          </div>
+        </div>
+
+        <div class="landing-actions">
+          <button class="btn btn-primary btn-glow" onclick="goToAuth()">Sign In</button>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="landing-footer">
+        <div class="footer-logo">
+          <img src="/static/darsync-learning-icon.png" alt="Darsync logo" />
+        </div>
+        <div class="footer-text">
+          <p><strong>Darsync</strong> — Your AI Lecture Studio</p>
+          <p>Study materials, animated tutor, and guided lessons</p>
+        </div>
+        <div class="copyright">
+          © 2026 <a href="https://vectosage-website.vercel.app/" target="_blank" rel="noopener noreferrer">VECTOSAGE</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== AUTH SCREEN ===================== -->
+  <section id="authScreen" class="screen">
+    <div class="auth-wrap glass">
+      <div class="auth-brand">
+        <img src="/static/darsync-learning-logo.png" alt="Darsync lecture studio" class="brand-logo" />
+        <p class="brand-sub">Sign in to your learning workspace</p>
+      </div>
+
+      <form id="loginForm" class="auth-form" autocomplete="off">
+        <label class="field">
+          <span class="field-label">Username</span>
+          <input type="text" id="loginUser" placeholder="your name" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input type="password" id="loginPass" placeholder="••••••••" required />
+        </label>
+        <button type="submit" class="btn btn-primary btn-glow" id="authSubmit">
+          <span id="authSubmitText">Enter Console</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p id="loginError" class="auth-error"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== MAIN APP ===================== -->
+  <section id="appScreen" class="screen">
+    <aside class="sidebar glass" id="mainSidebar">
+      <div class="side-brand">
+        <img src="/static/darsync-learning-icon.png" alt="Darsync logo" class="side-logo" />
+      </div>
+
+      <nav class="side-nav">
+        <button class="nav-item user-only" data-view="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item user-only" data-view="history">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+          <span>History</span>
+        </button>
+        <button class="nav-item user-only" data-view="feedback">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 8h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Feedback</span>
+        </button>
+
+        <button class="nav-item admin-only" data-view="newrag">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Study Library</span>
+        </button>
+        <button class="nav-item admin-only" data-view="settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2"/></svg>
+          <span>Settings</span>
+        </button>
+        <button class="nav-item super-admin-only" data-view="users">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="2"/><path d="M20 19v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Users</span>
+        </button>
+        <button class="nav-item admin-only" data-view="feedback">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 8h8M8 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Feedback</span>
+          <span class="nav-badge" id="feedbackBadge" hidden></span>
+        </button>
+      </nav>
+
+      <div class="side-status glass-inset" id="serverStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting…</span>
+      </div>
+
+      <div class="side-footer">
+        <div class="user-chip">
+          <div class="avatar" id="userAvatar">A</div>
+          <div class="user-meta">
+            <strong id="userName">admin</strong>
+            <span id="userRole">admin</span>
+          </div>
+        </div>
+        <div class="theme-toggle" title="Toggle theme">
+          <i class="fas fa-sun"></i>
+          <label class="switch">
+            <input type="checkbox" id="theme-switch" />
+            <span class="slider"></span>
+          </label>
+          <i class="fas fa-moon"></i>
+        </div>
+        <button class="btn-icon" id="logoutBtn" title="Logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="main-head">
+        <div>
+          <h2 class="view-title" id="viewTitle">Dashboard</h2>
+          <p class="view-sub" id="viewSub">Choose a course and topic to start a lesson</p>
+        </div>
+      </header>
+
+      <div class="view active" id="view-dashboard">
+        <div class="param-panel glass">
+          <div class="param-grid">
+            <label class="field">
+              <span class="field-label">Grade</span>
+              <div class="select-wrap"><select id="selCountry"></select><span class="chevron"></span></div>
+            </label>
+            <label class="field">
+              <span class="field-label">Subject</span>
+              <div class="select-wrap"><select id="selCategory"></select><span class="chevron"></span></div>
+            </label>
+            <label class="field">
+              <span class="field-label">Semester</span>
+              <div class="select-wrap"><select id="selSubcategory"></select><span class="chevron"></span></div>
+            </label>
+            <label class="field">
+              <span class="field-label">Unit / Lesson topic</span>
+              <div class="select-wrap"><select id="selTest"></select><span class="chevron"></span></div>
+            </label>
+          </div>
+          <div class="param-actions">
+            <div class="selection-chips" id="selectionChips"></div>
+            <button class="btn btn-primary btn-glow btn-run" id="runBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
+              <span>Start Learning</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="dash-cards">
+          <div class="dash-card glass">
+            <div class="dash-icon i1">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/><path d="M14 2v6h6M9 15h6M9 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <h4>Study Materials</h4>
+            <p class="dash-num" id="statFiles">0</p>
+            <span class="dash-label">indexed materials</span>
+          </div>
+          <div class="dash-card glass">
+            <div class="dash-icon i2">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" stroke-width="2"/></svg>
+            </div>
+            <h4>Study Sections</h4>
+            <p class="dash-num" id="statSections">0</p>
+            <span class="dash-label">ready to teach</span>
+          </div>
+          <div class="dash-card glass">
+            <div class="dash-icon i3">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2"/></svg>
+            </div>
+            <h4>Your Lessons</h4>
+            <p class="dash-num" id="statChats">0</p>
+            <span class="dash-label">lessons in your history</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="view" id="view-chat">
+        <div class="lesson-shell glass">
+          <div class="lesson-topbar">
+            <button class="btn-ghost" id="backToDash">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Back to courses
+            </button>
+            <div class="lesson-scope" id="lessonScope"></div>
+            <button class="btn-ghost" id="exportPdfBtn" title="Print or save the teacher explanation as PDF">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/><path d="M14 2v6h6M9 13h6M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Save lesson
+            </button>
+            <button class="btn-ghost" id="newLessonBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              New lesson
+            </button>
+          </div>
+
+          <div class="lesson-workspace">
+            <aside class="lesson-outline glass-inset">
+              <div class="lesson-outline-head">
+                <span>LESSON OUTLINE</span>
+                <span class="lesson-progress" id="lessonProgress">0 / 0</span>
+              </div>
+              <nav class="lesson-outline-list" id="lessonOutline" aria-label="Lesson segments">
+                <div class="lesson-loading">Your teacher is preparing the lesson…</div>
+              </nav>
+            </aside>
+
+            <main class="lesson-stage">
+              <article class="lesson-slide glass-inset" aria-live="polite">
+                <div class="lesson-slide-kicker" id="lessonSlideKicker">GETTING READY</div>
+                <h2 id="lessonSlideTitle">Preparing your lesson</h2>
+                <div class="lesson-source-preview" id="lessonSourcePreview" hidden>
+                  <div class="lesson-source-preview-toolbar">
+                    <div class="lesson-source-preview-label" id="lessonSourcePreviewLabel"></div>
+                    <button class="source-fullscreen-btn" id="sourceFullscreenBtn" type="button"
+                      aria-label="View excerpt full screen" title="View excerpt full screen" aria-pressed="false">
+                      <svg class="fullscreen-enter-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3" />
+                      </svg>
+                      <svg class="fullscreen-exit-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 3v5H3m13-5v5h5M3 16h5v5m13-5h-5v5" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p id="lessonSourcePreviewMessage" aria-live="polite"></p>
+                  <img id="lessonSourcePreviewImage" alt="Selected textbook excerpt" hidden />
+                </div>
+              </article>
+            </main>
+
+            <aside class="lesson-tutor glass-inset" aria-label="2D pharaonic teacher and narration">
+              <div class="tutor-video-frame" aria-label="2D pharaonic teacher avatar">
+                <div class="pharaoh-teacher" id="pharaohTeacher" role="img" aria-label="Darsync pharaonic teacher">
+                  <svg class="pharaoh-illustration" viewBox="0 0 360 270" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="tutor-sky" x1="0" y1="0" x2="1" y2="1">
+                        <stop stop-color="#fff5df"/><stop offset="1" stop-color="#f3d9b7"/>
+                      </linearGradient>
+                      <linearGradient id="tutor-gold" x1="0" y1="0" x2="0.9" y2="1">
+                        <stop stop-color="#ffe9a8"/><stop offset=".55" stop-color="#e6b95e"/><stop offset="1" stop-color="#c48b45"/>
+                      </linearGradient>
+                      <linearGradient id="tutor-blue" x1="0" y1="0" x2="1" y2="1">
+                        <stop stop-color="#76c4bd"/><stop offset=".5" stop-color="#4f9d9b"/><stop offset="1" stop-color="#387e86"/>
+                      </linearGradient>
+                    </defs>
+                    <rect width="360" height="270" rx="18" fill="url(#tutor-sky)"/>
+                    <circle cx="286" cy="48" r="24" fill="#fffdf3" opacity=".9"/>
+                    <circle cx="61" cy="78" r="13" fill="#fffdf3" opacity=".7"/>
+                    <path d="M25 220h310" stroke="#bd9b73" stroke-width="2" opacity=".4"/>
+                    <path d="M92 264c8-45 38-64 88-64s80 19 88 64" fill="url(#tutor-blue)" stroke="#397e82" stroke-width="4"/>
+                    <path d="m148 211 32 37 32-37-15-17h-34z" fill="#fff0cb" stroke="#d5aa62" stroke-width="3"/>
+                    <path d="M157 191v22l23 25 23-25v-22z" fill="#e8aa77"/>
+                    <path d="M114 126c0-59 28-94 66-94s66 35 66 94v19c0 49-31 80-66 80s-66-31-66-80z" fill="#e7ad7e" stroke="#c4865e" stroke-width="4"/>
+                    <path d="M103 130c-21-38-16-80 10-105l21 8 14-17h64l14 17 21-8c26 25 31 67 10 105l-13 28-7-71c-22-11-41-24-57-41-16 17-35 30-57 41l-7 71z" fill="url(#tutor-blue)" stroke="#dbb15f" stroke-width="7" stroke-linejoin="round"/>
+                    <path d="M110 40c26-12 48-29 70-49 22 20 44 37 70 49M108 59c26-10 49-25 72-46 23 21 46 36 72 46" fill="none" stroke="url(#tutor-gold)" stroke-width="7"/>
+                    <path d="M111 82c22-7 41-18 61-33M249 82c-22-7-41-18-61-33M114 104c18-5 34-13 50-24M246 104c-18-5-34-13-50-24" fill="none" stroke="#f0d18a" stroke-width="5"/>
+                    <path d="M119 128c13-11 28-11 42 0-13 10-28 10-42 0M199 128c13-11 28-11 42 0-13 10-28 10-42 0" fill="#fffdf4" stroke="#805441" stroke-width="3"/>
+                    <ellipse cx="140" cy="128" rx="5" ry="6" fill="#4a554c"/>
+                    <ellipse cx="220" cy="128" rx="5" ry="6" fill="#4a554c"/>
+                    <circle cx="142" cy="126" r="1.5" fill="#fff"/>
+                    <circle cx="222" cy="126" r="1.5" fill="#fff"/>
+                    <path d="M126 112q15-9 29-1M205 111q14-8 29 1" fill="none" stroke="#93634c" stroke-width="3" stroke-linecap="round"/>
+                    <path d="m180 133-6 24 11 3" fill="none" stroke="#c47f5b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <ellipse class="pharaoh-mouth-open" cx="180" cy="176" rx="10" ry="1.5" fill="#a95452"/>
+                    <path class="pharaoh-mouth" d="M163 174q17 13 34 0" fill="none" stroke="#a95452" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="128" cy="151" r="6" fill="#ec987e" opacity=".34"/>
+                    <circle cx="232" cy="151" r="6" fill="#ec987e" opacity=".34"/>
+                    <path d="M159 222h42l-7 33h-28z" fill="url(#tutor-gold)" stroke="#c18d4d" stroke-width="3"/>
+                    <path d="m164 233 16 10 16-10" fill="none" stroke="#fff1c8" stroke-width="3"/>
+                    <circle cx="180" cy="248" r="5" fill="#4c9995"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="tutor-transcript">
+                <div class="tutor-section-heading"><span>NARRATION</span><span id="tutorNarrationStatus">READY</span></div>
+                <p id="tutorTranscript" aria-live="polite">Your teacher's explanation will appear here.</p>
+              </div>
+            </aside>
+          </div>
+
+          <footer class="lesson-player">
+            <div class="player-current">
+              <span id="playerSlideLabel">READY TO LEARN</span>
+              <strong id="playerSlideTitle">Choose a lesson segment</strong>
+            </div>
+            <div class="player-controls">
+              <button class="player-control" id="lessonPrevBtn" type="button" aria-label="Previous lesson segment" title="Previous lesson segment" disabled>‹</button>
+              <button class="player-play" id="lessonPlayBtn" type="button" aria-label="Play teacher explanation" title="Play teacher explanation" disabled>▶</button>
+              <button class="player-control" id="lessonNextBtn" type="button" aria-label="Next lesson segment" title="Next lesson segment" disabled>›</button>
+              <button class="player-speed" id="lessonSpeedBtn" type="button" title="Change narration speed">1×</button>
+            </div>
+            <div class="player-progress">
+              <div><span id="playerProgressLabel">0 / 0 segments</span><span id="playerPlaybackStatus">TEXT MODE</span></div>
+              <div class="player-progress-track"><span id="playerProgressBar"></span></div>
+            </div>
+          </footer>
+        </div>
+      </div>
+
+      <div class="view" id="view-history">
+        <div class="history-list" id="historyList"></div>
+      </div>
+
+      <div class="view" id="view-feedback">
+        <div class="feedback-shell" id="feedbackViewContent"></div>
+      </div>
+
+      <div class="view" id="view-newrag">
+        <div class="nr-layout">
+          <aside class="nr-side glass">
+            <div class="nr-side-title">Study Library</div>
+            <nav class="nr-nav" id="nrNav">
+              <button class="nr-nav-item active" data-target="nr-params">
+                <span class="nr-step">1</span><span>Grade</span>
+              </button>
+              <button class="nr-nav-item" data-target="nr-upload">
+                <span class="nr-step">2</span><span>Study Materials</span>
+              </button>
+              <button class="nr-nav-item" data-target="nr-docs">
+                <span class="nr-step">3</span><span>Library</span>
+              </button>
+            </nav>
+            <div class="nr-scroll-btns">
+              <button class="nr-scroll-btn" id="nrUp" title="Scroll up">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="nr-scroll-btn" id="nrDown" title="Scroll down">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </aside>
+
+          <div class="nr-content" id="nrContent">
+            <section class="nr-section" id="nr-params">
+              <h3 class="nr-section-title">1 · Select grade and subject</h3>
+              <div class="param-panel glass">
+                <div class="param-grid">
+                  <label class="field">
+                    <span class="field-label">Grade</span>
+                    <div class="select-wrap"><select id="nrCountry"></select><span class="chevron"></span></div>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Subject</span>
+                    <div class="select-wrap"><select id="nrCategory"></select><span class="chevron"></span></div>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Semester</span>
+                    <div class="select-wrap"><select id="nrSubcategory"></select><span class="chevron"></span></div>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Unit / Lesson topic</span>
+                    <div class="select-wrap"><select id="nrTest"></select><span class="chevron"></span></div>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="nr-section" id="nr-upload">
+              <h3 class="nr-section-title">2 · Add study materials</h3>
+              <div class="upload-zone glass" id="uploadZone">
+                <input type="file" id="fileInput" accept="application/pdf" multiple hidden />
+                <div class="upload-inner">
+                  <div class="upload-icon">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                  <h4>Drop course PDFs here</h4>
+                  <p>Add textbooks, notes, or lecture materials to your study library</p>
+                  <p>PDFs up to 1 GB are uploaded in chunks and indexed in the background.</p>
+                  <button class="btn btn-ghost" id="browseBtn" type="button">Browse files</button>
+                </div>
+              </div>
+              <div class="nr-actions">
+                <button class="btn btn-primary btn-glow" id="ingestBtn">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2v6m0 0l3-3m-3 3L9 5M5 12H3m2 6H3m14 0h2m-2-6h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/></svg>
+                  <span>Add to Study Library</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="nr-section" id="nr-docs">
+              <h3 class="nr-section-title">3 · Study Library</h3>
+              <div class="files-table glass" id="filesTable"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div class="view" id="view-settings">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <p>Manage the grade, subject, semester, and unit or lesson topic options used to organize study materials.</p>
+        </div>
+        <div class="settings-grid" id="settingsGrid"></div>
+      </div>
+
+      <div class="view" id="view-users">
+        <div class="settings-header">
+          <h2>Users &amp; Admin Control</h2>
+          <p>Create, update, and remove students and administrators. Super admin can also assign study library permissions.</p>
+        </div>
+        <div class="settings-grid" id="usersGrid"></div>
+        <div class="empty-state" id="usersEmpty" style="display:none; margin-top: 14px;">No users found.</div>
+      </div>
+
+    </main>
+  </section>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal glass">
+      <h3 id="modalTitle">Confirm</h3>
+      <p id="modalText">Are you sure?</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+        <button class="btn btn-danger" id="modalConfirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="scopeBackdrop">
+    <div class="modal glass scope-modal">
+      <h3>🎯 Assign course topic</h3>
+      <p class="scope-sub" id="scopeFileName">Choose the course and lesson topic for this study material.</p>
+      <div class="scope-grid">
+        <label class="field">
+          <span class="field-label">Grade</span>
+          <div class="select-wrap"><select id="scopeCountry"></select><span class="chevron"></span></div>
+        </label>
+        <label class="field">
+          <span class="field-label">Subject</span>
+          <div class="select-wrap"><select id="scopeCategory"></select><span class="chevron"></span></div>
+        </label>
+        <label class="field">
+          <span class="field-label">Semester</span>
+          <div class="select-wrap"><select id="scopeSubcategory"></select><span class="chevron"></span></div>
+        </label>
+        <label class="field">
+          <span class="field-label">Unit / Lesson topic</span>
+          <div class="select-wrap"><select id="scopeTest"></select><span class="chevron"></span></div>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="scopeCancel">Cancel</button>
+        <button class="btn btn-primary" id="scopeSave">Save scope</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=27"></script>
+</body>
+</html>
