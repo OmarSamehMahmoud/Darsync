@@ -2,6 +2,12 @@ name: Deploy Darsync to GitHub Pages
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - migration/github-pages-supabase
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-pages.yml'
 
 permissions:
   contents: read
