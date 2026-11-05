@@ -9,8 +9,8 @@ window.addEventListener('error', (e) => {
 
 // -------------------- State --------------------
 const state = {
-  token: localStorage.getItem('px_token') || null,
-  user: JSON.parse(localStorage.getItem('px_user') || 'null'),
+  token: null,
+  user: null,
   taxonomy: { country: [], category: [], subcategory: [], test: [] },
   currentChat: null,
   currentView: 'dashboard',
@@ -502,19 +502,50 @@ function normalizePermissions(raw) {
 
 const api = {
   async call(path, { method = 'GET', body, form } = {}) {
-    const headers = {};
-    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-    let opts = { method, headers };
-    if (form) { opts.body = form; }
-    else if (body !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-    const res = await fetch(path, opts);
-    if (res.status === 401) {
-      if (path !== '/api/auth/login') showSignIn('Session expired. Please sign in again.');
-      throw new Error(path === '/api/auth/login' ? 'Invalid username or password' : 'Session expired');
+    const db = window.darsyncSupabase;
+    if (!db) throw new Error('Supabase is not initialized. Check the project configuration.');
+    const fail = (error) => { if (error) throw new Error(error.message || String(error)); };
+    const parts = path.split('/').filter(Boolean);
+    const verb = method.toUpperCase();
+
+    if (path === '/api/auth/me') return { user: state.user };
+    if (path === '/api/status') return { online: false, provider: 'NVIDIA', chat_model: 'Edge Function not connected' };
+
+    if (path === '/api/taxonomy' && verb === 'GET') {
+      const { data, error } = await db.from('taxonomy').select('id,type,name').order('name');
+      fail(error);
+      const result = { country: [], category: [], subcategory: [], test: [] };
+      (data || []).forEach((row) => { if (result[row.type]) result[row.type].push(row); });
+      return result;
     }
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
-    return data;
+    if (path === '/api/files' && verb === 'GET') {
+      const { data, error } = await db.from('study_files').select('*').order('created_at', { ascending: false });
+      fail(error);
+      return { files: (data || []).map(f => ({ ...f, clauses: f.clauses || 0, ingested: !!f.ingested })) };
+    }
+    if (path === '/api/chats' && verb === 'GET') {
+      const { data, error } = await db.from('chats').select('*').order('updated_at', { ascending: false });
+      fail(error); return { chats: data || [] };
+    }
+    if (path === '/api/chats' && verb === 'POST') {
+      const { data, error } = await db.from('chats').insert({ ...body, user_id: state.user.id }).select('*').single();
+      fail(error); return data;
+    }
+    if (parts[0] === 'api' && parts[1] === 'chats' && parts[2] && parts.length === 3) {
+      const id = parts[2];
+      if (verb === 'GET') {
+        const [{ data: chat, error: chatError }, { data: messages, error: msgError }] = await Promise.all([
+          db.from('chats').select('*').eq('id', id).single(),
+          db.from('messages').select('*').eq('chat_id', id).order('created_at')
+        ]);
+        fail(chatError); fail(msgError);
+        return { ...chat, messages: messages || [] };
+      }
+      if (verb === 'DELETE') {
+        const { error } = await db.from('chats').delete().eq('id', id); fail(error); return { ok: true };
+      }
+    }
+    throw new Error('This feature is not connected to the hosted backend yet. Existing local FastAPI routes are not available on GitHub Pages.');
   },
 };
 
@@ -593,11 +624,9 @@ $('loginForm').addEventListener('submit', async (e) => {
   const password = $('loginPass').value;
   $('loginError').textContent = '';
   try {
-    const data = await api.call('/api/auth/login', { method: 'POST', body: { username, password } });
+    const data = await window.darsyncAuth.signIn(username, password);
     state.token = data.token;
     state.user = data.user;
-    localStorage.setItem('px_token', data.token);
-    localStorage.setItem('px_user', JSON.stringify(data.user));
     $('loginPass').value = '';
     enterApp();
   } catch (err) {
@@ -614,8 +643,7 @@ function logout() {
 
 function clearSession() {
   cancelLessonPreparation();
-  localStorage.removeItem('px_token');
-  localStorage.removeItem('px_user');
+  if (window.darsyncAuth) window.darsyncAuth.signOut().catch(() => {});
   state.token = null; state.user = null; state.currentChat = null;
 }
 
@@ -2275,13 +2303,20 @@ async function renderUsers() {
 }
 
 // -------------------- Init --------------------
-(function init() {
+(async function init() {
   initializeLanguage();
   initializeTheme();
   initializeSidebar();
-  if (state.token && state.user) {
-    enterApp();
-  } else {
-    $('landingScreen').classList.add('active');
+  try {
+    const restored = await window.darsyncAuth.restore();
+    if (restored) {
+      state.token = restored.token;
+      state.user = restored.user;
+      await enterApp();
+      return;
+    }
+  } catch (error) {
+    console.error('Supabase session restore failed:', error);
   }
+  $('landingScreen').classList.add('active');
 })();
