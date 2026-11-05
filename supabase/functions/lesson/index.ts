@@ -149,10 +149,11 @@ Deno.serve(async (req) => {
             : "Answer the student's question clearly and naturally. If the provided excerpts do not contain the answer, say so instead of guessing."
         ].join("\n");
 
-        const sendNvidia = async (messages: any[], segmentIndex?: number) => {
+        const sendNvidia = async (messages: any[], expectedSegments = 0) => {
           const response = await fetch(nvidiaUrl, {
             method: "POST",
             headers: { Authorization: `Bearer ${nvidiaKey}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+            signal: AbortSignal.timeout(115_000),
             body: JSON.stringify({
               model, messages, max_tokens: 4096, seed: 0,
               temperature: 0.2, top_p: 0.95, stream: true,
@@ -166,6 +167,18 @@ Deno.serve(async (req) => {
           const decoder = new TextDecoder();
           let buffer = "";
           let segmentText = "";
+          let emittedSegments = 0;
+          const emitSegmentProgress = () => {
+            if (!expectedSegments) return;
+            const headings = [...segmentText.matchAll(/(?:^|\\n)\\s*SEGMENT\\s+(\\d+)\\s*:/gim)];
+            for (const heading of headings) {
+              const index = Number(heading[1]);
+              if (index === emittedSegments + 1 && index <= expectedSegments) {
+                emittedSegments = index;
+                emit("segment", { index, total: expectedSegments });
+              }
+            }
+          };
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -182,6 +195,7 @@ Deno.serve(async (req) => {
               if (typeof delta === "string" && delta) {
                 segmentText += delta;
                 fullAnswer += delta;
+                emitSegmentProgress();
                 emit("token", delta);
               }
             }
@@ -195,22 +209,34 @@ Deno.serve(async (req) => {
                 if (typeof delta === "string" && delta) {
                   segmentText += delta;
                   fullAnswer += delta;
+                  emitSegmentProgress();
                   emit("token", delta);
                 }
               } catch { /* ignore an incomplete final SSE frame */ }
             }
           }
           if (!segmentText.trim()) throw new Error("NVIDIA returned an empty answer.");
+          if (expectedSegments && emittedSegments !== expectedSegments) {
+            throw new Error(`The teacher generated ${emittedSegments} of ${expectedSegments} lesson segments. Please retry the lesson.`);
+          }
         };
 
         if (lessonMode) {
-          for (let i = 0; i < hits.length; i++) {
-            emit("segment", { index: i + 1, total: hits.length });
-            if (i) { fullAnswer += "\n\n"; emit("token", "\n\n"); }
-            const hit = hits[i];
-            const prompt = `Course: ${scope.country} / ${scope.category} / ${scope.subcategory} / ${scope.test}.\nStudent request: ${question}\n\nTeach only SOURCE EXCERPT ${i + 1}. Start exactly with "SEGMENT ${i + 1}: " and a brief title on the same line. Then give the spoken explanation.\n\nStudy material:\n${buildContext([{ ...hit, number: hit.number || `PDF page ${hit.page}` }]).replace("[SOURCE EXCERPT 1]", `[SOURCE EXCERPT ${i + 1}]`)}`;
-            await sendNvidia([{ role: "system", content: system }, { role: "user", content: prompt }], i + 1);
-          }
+          const context = buildContext(hits);
+          const prompt = `Course: ${scope.country} / ${scope.category} / ${scope.subcategory} / ${scope.test}.
+Student request: ${question}
+
+Create one complete lesson covering ALL supplied source excerpts in their original order.
+Return exactly one segment for every excerpt, with no introduction or conclusion.
+For excerpt N, start a new line with exactly "SEGMENT N: " followed by a short navigation title on the same line, then 2-3 concise spoken sentences in friendly Egyptian Arabic.
+Use the same numbering as the [SOURCE EXCERPT N] labels. Do not merge, skip, reorder, or invent excerpts. If an excerpt is unclear, say so rather than guessing.
+
+Study material:
+${context}`;
+          await sendNvidia([
+            { role: "system", content: system },
+            { role: "user", content: prompt },
+          ], hits.length);
         } else {
           const context = buildContext(hits);
           const userPrompt = `Study-material context:\n${context}\n\nStudent request: ${question}`;
