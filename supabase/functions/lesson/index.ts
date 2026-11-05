@@ -37,7 +37,7 @@ function sourceFromHit(hit: any, index: number) {
 }
 function buildContext(hits: any[]) {
   return hits.map((h, i) =>
-    `[SOURCE EXCERPT ${i + 1}] [${h.number || `PDF page ${h.page}`}] (source: ${h.source_file || ""}, p.${h.page})\n${String(h.text || "").slice(0, 2600)}`
+    `[SOURCE EXCERPT ${i + 1}] [${h.number || `PDF page ${h.page}`}] (source: ${h.source_file || ""}, p.${h.page})\n${String(h.text || "").slice(0, 1800)}`
   ).join("\n\n");
 }
 function rankRows(rows: any[], query: string, topK = 8) {
@@ -153,9 +153,9 @@ Deno.serve(async (req) => {
           const response = await fetch(nvidiaUrl, {
             method: "POST",
             headers: { Authorization: `Bearer ${nvidiaKey}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-            signal: AbortSignal.timeout(115_000),
+            signal: AbortSignal.timeout(135_000),
             body: JSON.stringify({
-              model, messages, max_tokens: 4096, seed: 0,
+              model, messages, max_tokens: 3072, seed: 0,
               temperature: 0.2, top_p: 0.95, stream: true,
             }),
           });
